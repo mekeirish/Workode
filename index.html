@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Workode</title>
+    <title>Cloudflare Workers Studio</title>
 <style>
     @media (max-width: 767px) {
         [data-panel]:not(.panel-active) { display: none; }
@@ -13,36 +13,6 @@
 </style>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-<meta property="og:title" content="Workode">
-<meta name="twitter:title" content="Workode">
-<meta name="application-name" content="Workode">
-<meta name="apple-mobile-web-app-title" content="Workode">
-<meta name="description" content="Cloudflare workers">
-<meta property="og:description" content="Cloudflare workers">
-<meta name="twitter:description" content="Cloudflare workers">
-<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
-<link rel="icon" type="image/png" sizes="512x512" href="./icon.png">
-<meta property="og:image" content="https://mekeirish.github.io/Workode/icon.png">
-<meta name="twitter:image" content="https://mekeirish.github.io/Workode/icon.png">
-<meta name="twitter:card" content="summary">
-<meta property="og:url" content="https://mekeirish.github.io/Workode/">
-<link rel="manifest" href="./manifest.json">
-<meta name="theme-color" content="#000000">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="apple-touch-icon" href="./icon.png">
-<link rel="apple-touch-startup-image" media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./splash-1320x2868.png">
-<link rel="apple-touch-startup-image" media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./splash-1206x2622.png">
-<link rel="apple-touch-startup-image" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./splash-1290x2796.png">
-<link rel="apple-touch-startup-image" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./splash-1179x2556.png">
-<link rel="apple-touch-startup-image" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./splash-1284x2778.png">
-<link rel="apple-touch-startup-image" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./splash-1170x2532.png">
-<link rel="apple-touch-startup-image" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./splash-1242x2688.png">
-<link rel="apple-touch-startup-image" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="./splash-828x1792.png">
-<link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./splash-1125x2436.png">
-<link rel="apple-touch-startup-image" media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./splash-1242x2208.png">
-<link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="./splash-750x1334.png">
-<link rel="apple-touch-startup-image" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="./splash-640x1136.png">
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans pb-12">
 
@@ -106,6 +76,16 @@
             <span>Scanner PWA</span>
         </button>
     </div>
+<div class="grid grid-cols-2 gap-2 mb-3">
+    <button onclick="copyRealtimerEmpty()" title="Copie le prompt Realtimer pour l'IA" class="flex items-center justify-center gap-2 py-2.5 md:py-3 bg-amber-600/20 text-amber-300 active:bg-amber-600/40 rounded-lg text-xs md:text-sm font-medium leading-tight transition">
+        <span class="text-lg leading-none">⚡</span>
+        <span>Realtimer empty</span>
+    </button>
+    <button onclick="openRealtimerFull()" title="Importe la réponse markdown de l'IA" class="flex items-center justify-center gap-2 py-2.5 md:py-3 bg-orange-600/20 text-orange-300 active:bg-orange-600/40 rounded-lg text-xs md:text-sm font-medium leading-tight transition">
+        <span class="text-lg leading-none">⚡</span>
+        <span>Realtimer Full</span>
+    </button>
+</div>
     <p class="text-[11px] text-slate-500 mb-2 leading-relaxed">
         <span title="Actif : au moins une invocation sur les 30 derniers jours">🟢</span> actif
         <span class="mx-1 text-slate-700">·</span>
@@ -372,6 +352,675 @@
         <span id="console-dot" class="hidden absolute top-1.5 left-1/2 ml-3 w-2.5 h-2.5 rounded-full"></span>
     </button>
 </nav>
+<script type="text/plain" id="rt-worker-template">
+// Realtimer — Worker générique multi-PWA
+// Liaisons : RT_KV (KV), RT_DB (D1) ; secret : ADMIN_KEY
+
+const VERSION = '1.1.0';
+const MAX_BODY = 256 * 1024;
+const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,47}$/;
+const ID_RE = /^[A-Za-z0-9_.:-]{1,128}$/;
+const RESERVED = ['changes', 'stream', 'kv'];
+
+// Budget quotidien de requêtes pour Realtimer. Le quota gratuit du compte est de 100 000,
+// partagé avec tous les autres Workers : on garde de la marge pour eux.
+const DAILY_BUDGET = 70000;
+// Rythme : de DAY_START à DAY_END (heure de Paris) une heure pèse 1, la nuit NIGHT_WEIGHT.
+// Le budget autorisé est cumulé depuis 00:00 UTC (reset du quota Cloudflare).
+const DAY_START = 8;
+const DAY_END = 23;
+const NIGHT_WEIGHT = 0.25;
+const TIMEZONE = 'Europe/Paris';
+// Budget minimal cumulé, pour ne pas ralentir juste après le reset.
+const BUDGET_FLOOR = 2000;
+// Une requête sur SAMPLE est comptée (le compteur est multiplié d'autant) : économise les écritures D1.
+const SAMPLE = 50;
+const CACHE_MS = 60000;
+// Palier = consommé / autorisé jusqu'à maintenant.
+const TIERS = [
+  { name: 1, upTo: 0.9, streamMs: 25000, pollMs: 1500 },
+  { name: 2, upTo: 1.2, streamMs: 60000, pollMs: 3000 },
+  { name: 3, upTo: Infinity, streamMs: 120000, pollMs: 5000 }
+];
+
+class HttpError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+}
+
+let schemaReady = false;
+let usageCache = null;
+const appCache = new Map();
+const hourFormat = new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hourCycle: 'h23', timeZone: TIMEZONE });
+
+async function ensureSchema(env) {
+  if (schemaReady) return;
+  await env.RT_DB.batch([
+    env.RT_DB.prepare('CREATE TABLE IF NOT EXISTS docs (app TEXT NOT NULL, col TEXT NOT NULL, id TEXT NOT NULL, data TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (app, col, id))'),
+    env.RT_DB.prepare('CREATE TABLE IF NOT EXISTS changes (seq INTEGER PRIMARY KEY AUTOINCREMENT, app TEXT NOT NULL, col TEXT NOT NULL, id TEXT NOT NULL, op TEXT NOT NULL, data TEXT, ts INTEGER NOT NULL)'),
+    env.RT_DB.prepare('CREATE TABLE IF NOT EXISTS usage (day TEXT PRIMARY KEY, n INTEGER NOT NULL)'),
+    env.RT_DB.prepare('CREATE INDEX IF NOT EXISTS idx_changes_app ON changes (app, seq)'),
+    env.RT_DB.prepare('CREATE INDEX IF NOT EXISTS idx_docs_col ON docs (app, col, updated_at)')
+  ]);
+  schemaReady = true;
+}
+
+function dayKey(ms) {
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+function hourWeight(ms) {
+  const hour = parseInt(hourFormat.format(new Date(ms)), 10) % 24;
+  return hour >= DAY_START && hour < DAY_END ? 1 : NIGHT_WEIGHT;
+}
+
+// Part du budget journalier autorisée jusqu'à maintenant (0 à 1), pondérée par heure.
+function allowedShare(now) {
+  const date = new Date(now);
+  const dayStart = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  let total = 0;
+  let done = 0;
+  for (let h = 0; h < 24; h++) {
+    const start = dayStart + h * 3600000;
+    const weight = hourWeight(start);
+    total += weight;
+    if (now >= start + 3600000) done += weight;
+    else if (now > start) done += weight * (now - start) / 3600000;
+  }
+  return done / total;
+}
+
+function pickTier(used, allowed) {
+  if (used >= DAILY_BUDGET) return TIERS[TIERS.length - 1];
+  const ratio = used / allowed;
+  return TIERS.find(tier => ratio < tier.upTo) || TIERS[TIERS.length - 1];
+}
+
+async function getUsageState(env) {
+  const now = Date.now();
+  if (usageCache && now - usageCache.at < CACHE_MS) return usageCache.state;
+
+  let used = 0;
+  try {
+    const row = await env.RT_DB.prepare('SELECT n FROM usage WHERE day = ?1').bind(dayKey(now)).first();
+    used = row ? row.n : 0;
+  } catch (err) {
+    used = 0;
+  }
+
+  const allowed = Math.max(DAILY_BUDGET * allowedShare(now), BUDGET_FLOOR);
+  const tier = pickTier(used, allowed);
+  const state = {
+    used: used,
+    allowed: Math.round(allowed),
+    budget: DAILY_BUDGET,
+    level: tier.name,
+    stream_ms: tier.streamMs,
+    poll_ms: tier.pollMs
+  };
+  usageCache = { at: now, state: state };
+  return state;
+}
+
+function countRequest(env, ctx) {
+  if (Math.random() >= 1 / SAMPLE) return;
+  ctx.waitUntil(
+    env.RT_DB.prepare('INSERT INTO usage (day, n) VALUES (?1, ?2) ON CONFLICT(day) DO UPDATE SET n = n + ?2')
+      .bind(dayKey(Date.now()), SAMPLE)
+      .run()
+      .catch(() => {})
+  );
+}
+
+function cors(request) {
+  return {
+    'Access-Control-Allow-Origin': request.headers.get('Origin') || '*',
+    'Vary': 'Origin',
+    'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, X-App-Key, X-Admin-Key',
+    'Access-Control-Max-Age': '86400'
+  };
+}
+
+function json(request, data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status: status,
+    headers: Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }, cors(request))
+  });
+}
+
+function safeEqual(a, b) {
+  a = String(a || '');
+  b = String(b || '');
+  if (!a || !b || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+function newKey() {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return 'rt_' + Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function checkName(value, label) {
+  const name = String(value || '').toLowerCase();
+  if (!NAME_RE.test(name)) throw new HttpError(400, 'Nom de ' + label + ' invalide (a-z, 0-9, - et _)');
+  return name;
+}
+
+function clampInt(value, min, max, fallback) {
+  const n = parseInt(value, 10);
+  if (Number.isNaN(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+function safeParse(text) {
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    return null;
+  }
+}
+
+function cleanOrigins(list) {
+  if (!Array.isArray(list)) return [];
+  return list.map(v => String(v).trim().replace(/\/+$/, '')).filter(Boolean).slice(0, 50);
+}
+
+function cleanCollections(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map(v => String(v).trim().toLowerCase())
+    .filter(v => NAME_RE.test(v) && !RESERVED.includes(v))
+    .slice(0, 100);
+}
+
+function mergeList(a, b) {
+  return Array.from(new Set(a.concat(b)));
+}
+
+async function readJson(request) {
+  const text = await request.text();
+  if (text.length > MAX_BODY) throw new HttpError(413, 'Corps trop volumineux (256 Ko max)');
+  if (!text.trim()) throw new HttpError(400, 'Corps JSON requis');
+  let value;
+  try {
+    value = JSON.parse(text);
+  } catch (err) {
+    throw new HttpError(400, 'JSON invalide');
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new HttpError(400, 'Le corps doit être un objet JSON');
+  }
+  return value;
+}
+
+// Config d'application gardée en mémoire 60 s (10 s si inconnue) : évite une lecture KV par requête.
+async function getApp(env, name, fresh) {
+  const now = Date.now();
+  const hit = appCache.get(name);
+  if (!fresh && hit && now - hit.at < (hit.app ? CACHE_MS : 10000)) return hit.app;
+
+  const raw = await env.RT_KV.get('app:' + name);
+  const app = raw ? safeParse(raw) : null;
+  if (app) {
+    app.origins = app.origins || [];
+    app.collections = app.collections || [];
+  }
+
+  if (appCache.size > 200) appCache.clear();
+  appCache.set(name, { app: app, at: now });
+  return app;
+}
+
+function toDoc(row) {
+  return { id: row.id, data: safeParse(row.data), created_at: row.created_at, updated_at: row.updated_at };
+}
+
+function toChange(row) {
+  return { seq: row.seq, col: row.col, id: row.id, op: row.op, data: row.data ? safeParse(row.data) : null, ts: row.ts };
+}
+
+function maybePrune(env, ctx) {
+  if (Math.random() > 0.02) return;
+  const limit = Date.now() - 7 * 24 * 3600 * 1000;
+  ctx.waitUntil(env.RT_DB.prepare('DELETE FROM changes WHERE ts < ?1').bind(limit).run().catch(() => {}));
+}
+
+async function saveDoc(env, ctx, appName, col, id, text) {
+  if (text.length > MAX_BODY) throw new HttpError(413, 'Document trop volumineux (256 Ko max)');
+  const now = Date.now();
+  await env.RT_DB.batch([
+    env.RT_DB.prepare('INSERT INTO docs (app, col, id, data, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT(app, col, id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at')
+      .bind(appName, col, id, text, now, now),
+    env.RT_DB.prepare('INSERT INTO changes (app, col, id, op, data, ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6)')
+      .bind(appName, col, id, 'set', text, now)
+  ]);
+  maybePrune(env, ctx);
+  return now;
+}
+
+async function lastSeq(env, appName) {
+  const row = await env.RT_DB.prepare('SELECT COALESCE(MAX(seq), 0) AS last FROM changes WHERE app = ?1').bind(appName).first();
+  return row ? row.last : 0;
+}
+
+async function readChanges(env, appName, since, col, limit) {
+  let sql = 'SELECT seq, col, id, op, data, ts FROM changes WHERE app = ?1 AND seq > ?2';
+  const params = [appName, since];
+  if (col) {
+    sql += ' AND col = ?3';
+    params.push(col);
+  }
+  sql += ' ORDER BY seq ASC LIMIT ' + limit;
+  const result = await env.RT_DB.prepare(sql).bind(...params).all();
+  return result.results.map(toChange);
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export default {
+  async fetch(request, env, ctx) {
+    try {
+      if (request.method === 'OPTIONS') {
+        if (env.RT_DB) countRequest(env, ctx);
+        return new Response(null, { status: 204, headers: cors(request) });
+      }
+      if (!env.RT_KV || !env.RT_DB) return json(request, { error: 'Liaisons RT_KV / RT_DB manquantes' }, 500);
+
+      countRequest(env, ctx);
+
+      const url = new URL(request.url);
+      const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
+
+      if (parts.length === 0) return json(request, { name: 'Realtimer', version: VERSION, ok: true });
+
+      await ensureSchema(env);
+
+      if (parts[0] === 'admin') return await handleAdmin(request, env, url, parts);
+      if (parts[0] === 'v1') return await handleApi(request, env, ctx, url, parts);
+      return json(request, { error: 'Route inconnue' }, 404);
+    } catch (err) {
+      if (err instanceof HttpError) return json(request, { error: err.message }, err.status);
+      return json(request, { error: 'Erreur interne', detail: String((err && err.message) || err) }, 500);
+    }
+  }
+};
+
+async function handleAdmin(request, env, url, parts) {
+  const key = request.headers.get('X-Admin-Key') || '';
+  if (!env.ADMIN_KEY || !safeEqual(key, env.ADMIN_KEY)) throw new HttpError(401, 'Clé admin invalide');
+
+  const method = request.method;
+
+  if (parts[1] === 'stats' && method === 'GET') {
+    const rows = await env.RT_DB.prepare('SELECT app, col, COUNT(*) AS n FROM docs GROUP BY app, col ORDER BY app, col').all();
+    return json(request, { stats: rows.results });
+  }
+
+  if (parts[1] === 'usage' && method === 'GET') {
+    usageCache = null;
+    return json(request, await getUsageState(env));
+  }
+
+  if (parts[1] !== 'apps') throw new HttpError(404, 'Route admin inconnue');
+
+  if (parts.length === 2 && method === 'GET') {
+    const list = await env.RT_KV.list({ prefix: 'app:' });
+    const apps = [];
+    for (const item of list.keys) {
+      const app = safeParse((await env.RT_KV.get(item.name)) || 'null');
+      if (app) apps.push({ name: app.name, origins: app.origins, collections: app.collections, created_at: app.created_at });
+    }
+    return json(request, { apps: apps });
+  }
+
+  const name = checkName(parts[2], 'application');
+
+  if (method === 'GET') {
+    const app = await getApp(env, name, true);
+    if (!app) throw new HttpError(404, 'Application inconnue');
+    return json(request, { app: app });
+  }
+
+  if (method === 'PUT') {
+    const body = await readJson(request);
+    const existing = await getApp(env, name, true);
+
+    let origins = existing ? existing.origins : [];
+    if (Array.isArray(body.origins)) {
+      const incoming = cleanOrigins(body.origins);
+      if (body.replace || !existing) origins = incoming;
+      else if (origins.length > 0) origins = mergeList(origins, incoming);
+    }
+
+    let collections = existing ? existing.collections : [];
+    if (Array.isArray(body.collections)) {
+      const incoming = cleanCollections(body.collections);
+      if (body.replace || !existing) collections = incoming;
+      else if (collections.length > 0) collections = mergeList(collections, incoming);
+    }
+
+    const app = {
+      name: name,
+      key: existing && !body.rotate_key ? existing.key : newKey(),
+      origins: origins,
+      collections: collections,
+      created_at: existing ? existing.created_at : Date.now()
+    };
+    await env.RT_KV.put('app:' + name, JSON.stringify(app));
+    appCache.delete(name);
+    return json(request, { app: app, created: !existing });
+  }
+
+  if (method === 'DELETE') {
+    await env.RT_KV.delete('app:' + name);
+    appCache.delete(name);
+    if (url.searchParams.get('purge') === '1') {
+      await env.RT_DB.batch([
+        env.RT_DB.prepare('DELETE FROM docs WHERE app = ?1').bind(name),
+        env.RT_DB.prepare('DELETE FROM changes WHERE app = ?1').bind(name)
+      ]);
+    }
+    return json(request, { ok: true });
+  }
+
+  throw new HttpError(405, 'Méthode non autorisée');
+}
+
+async function handleApi(request, env, ctx, url, parts) {
+  const appName = checkName(parts[1], 'application');
+  const app = await getApp(env, appName);
+  if (!app) throw new HttpError(404, 'Application inconnue');
+
+  const key = request.headers.get('X-App-Key') || url.searchParams.get('key') || '';
+  if (!safeEqual(key, app.key)) throw new HttpError(401, 'Clé invalide');
+
+  const origin = request.headers.get('Origin');
+  if (origin && app.origins.length > 0 && !app.origins.includes(origin)) {
+    throw new HttpError(403, 'Origine non autorisée');
+  }
+
+  const segment = parts[2];
+  if (!segment) throw new HttpError(404, 'Route inconnue');
+
+  if (segment === 'changes') return await handleChanges(request, env, url, app);
+  if (segment === 'stream') return await handleStream(request, env, ctx, url, app);
+  if (segment === 'kv') return await handleKv(request, env, url, app, parts[3]);
+
+  const col = checkName(segment, 'collection');
+  if (app.collections.length > 0 && !app.collections.includes(col)) {
+    throw new HttpError(403, 'Collection non autorisée');
+  }
+
+  const id = parts[3];
+  const method = request.method;
+
+  if (!id) {
+    if (method === 'GET') {
+      const limit = clampInt(url.searchParams.get('limit'), 1, 500, 100);
+      const order = url.searchParams.get('order') === 'asc' ? 'ASC' : 'DESC';
+      const rows = await env.RT_DB.prepare('SELECT id, data, created_at, updated_at FROM docs WHERE app = ?1 AND col = ?2 ORDER BY updated_at ' + order + ' LIMIT ?3')
+        .bind(app.name, col, limit).all();
+      return json(request, { docs: rows.results.map(toDoc) });
+    }
+    if (method === 'POST') {
+      const body = await readJson(request);
+      const newId = crypto.randomUUID().replace(/-/g, '').slice(0, 20);
+      const now = await saveDoc(env, ctx, app.name, col, newId, JSON.stringify(body));
+      return json(request, { id: newId, data: body, created_at: now, updated_at: now }, 201);
+    }
+    throw new HttpError(405, 'Méthode non autorisée');
+  }
+
+  if (!ID_RE.test(id)) throw new HttpError(400, 'Identifiant invalide');
+
+  if (method === 'GET') {
+    const row = await env.RT_DB.prepare('SELECT id, data, created_at, updated_at FROM docs WHERE app = ?1 AND col = ?2 AND id = ?3')
+      .bind(app.name, col, id).first();
+    if (!row) throw new HttpError(404, 'Document introuvable');
+    return json(request, toDoc(row));
+  }
+
+  if (method === 'PUT') {
+    const body = await readJson(request);
+    const now = await saveDoc(env, ctx, app.name, col, id, JSON.stringify(body));
+    return json(request, { id: id, data: body, updated_at: now });
+  }
+
+  if (method === 'PATCH') {
+    const body = await readJson(request);
+    const row = await env.RT_DB.prepare('SELECT data FROM docs WHERE app = ?1 AND col = ?2 AND id = ?3')
+      .bind(app.name, col, id).first();
+    if (!row) throw new HttpError(404, 'Document introuvable');
+    const merged = Object.assign({}, safeParse(row.data) || {}, body);
+    const now = await saveDoc(env, ctx, app.name, col, id, JSON.stringify(merged));
+    return json(request, { id: id, data: merged, updated_at: now });
+  }
+
+  if (method === 'DELETE') {
+    const row = await env.RT_DB.prepare('SELECT id FROM docs WHERE app = ?1 AND col = ?2 AND id = ?3')
+      .bind(app.name, col, id).first();
+    if (!row) return json(request, { ok: true, deleted: false });
+    const now = Date.now();
+    await env.RT_DB.batch([
+      env.RT_DB.prepare('DELETE FROM docs WHERE app = ?1 AND col = ?2 AND id = ?3').bind(app.name, col, id),
+      env.RT_DB.prepare('INSERT INTO changes (app, col, id, op, data, ts) VALUES (?1, ?2, ?3, ?4, NULL, ?5)')
+        .bind(app.name, col, id, 'delete', now)
+    ]);
+    maybePrune(env, ctx);
+    return json(request, { ok: true, deleted: true });
+  }
+
+  throw new HttpError(405, 'Méthode non autorisée');
+}
+
+async function handleChanges(request, env, url, app) {
+  if (request.method !== 'GET') throw new HttpError(405, 'Méthode non autorisée');
+
+  const colParam = url.searchParams.get('col');
+  const col = colParam ? checkName(colParam, 'collection') : '';
+  const sinceRaw = url.searchParams.get('since');
+
+  if (sinceRaw === 'latest') {
+    return json(request, { changes: [], last: await lastSeq(env, app.name) });
+  }
+
+  const since = clampInt(sinceRaw, 0, Number.MAX_SAFE_INTEGER, 0);
+  const limit = clampInt(url.searchParams.get('limit'), 1, 500, 200);
+  const changes = await readChanges(env, app.name, since, col, limit);
+  return json(request, { changes: changes, last: changes.length ? changes[changes.length - 1].seq : since });
+}
+
+async function handleStream(request, env, ctx, url, app) {
+  if (request.method !== 'GET') throw new HttpError(405, 'Méthode non autorisée');
+
+  const colParam = url.searchParams.get('col');
+  const col = colParam ? checkName(colParam, 'collection') : '';
+  const sinceRaw = request.headers.get('Last-Event-ID') || url.searchParams.get('since');
+
+  // Durée du flux et fréquence de lecture selon le palier de consommation du jour.
+  const usage = await getUsageState(env);
+
+  const encoder = new TextEncoder();
+  const stream = new TransformStream();
+  const writer = stream.writable.getWriter();
+
+  const run = async () => {
+    try {
+      let since = sinceRaw && sinceRaw !== 'latest' ? (parseInt(sinceRaw, 10) || 0) : await lastSeq(env, app.name);
+      await writer.write(encoder.encode('retry: 2000\n: connecté, palier ' + usage.level + '\n\n'));
+
+      const deadline = Date.now() + usage.stream_ms;
+      while (Date.now() < deadline) {
+        const changes = await readChanges(env, app.name, since, col, 100);
+        if (changes.length > 0) {
+          for (const change of changes) {
+            await writer.write(encoder.encode('id: ' + change.seq + '\nevent: change\ndata: ' + JSON.stringify(change) + '\n\n'));
+            since = change.seq;
+          }
+        } else {
+          await writer.write(encoder.encode(': ping\n\n'));
+        }
+        await sleep(usage.poll_ms);
+      }
+      await writer.write(encoder.encode('event: reconnect\ndata: ' + since + '\n\n'));
+    } catch (err) {
+      // client parti : on s'arrête
+    } finally {
+      try {
+        await writer.close();
+      } catch (err) {
+        // déjà fermé
+      }
+    }
+  };
+
+  ctx.waitUntil(run());
+
+  return new Response(stream.readable, {
+    headers: Object.assign({ 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store' }, cors(request))
+  });
+}
+
+async function handleKv(request, env, url, app, keyName) {
+  const name = String(keyName || '');
+  if (!ID_RE.test(name)) throw new HttpError(400, 'Clé KV invalide');
+  const storageKey = 'kv:' + app.name + ':' + name;
+
+  if (request.method === 'GET') {
+    const value = await env.RT_KV.get(storageKey);
+    if (value === null) throw new HttpError(404, 'Introuvable');
+    return json(request, { key: name, value: safeParse(value) });
+  }
+
+  if (request.method === 'PUT') {
+    const body = await readJson(request);
+    const text = JSON.stringify(body);
+    if (text.length > 20 * 1024) throw new HttpError(413, 'Valeur KV trop volumineuse (20 Ko max)');
+    const ttl = parseInt(url.searchParams.get('ttl') || '', 10);
+    const options = ttl >= 60 ? { expirationTtl: ttl } : {};
+    await env.RT_KV.put(storageKey, text, options);
+    return json(request, { ok: true });
+  }
+
+  if (request.method === 'DELETE') {
+    await env.RT_KV.delete(storageKey);
+    return json(request, { ok: true });
+  }
+
+  throw new HttpError(405, 'Méthode non autorisée');
+}
+</script>
+<script type="text/plain" id="rt-client-template">
+/* Realtimer — client (remplacés automatiquement : __RT_URL__, __RT_APP__, __RT_KEY__) */
+const Realtimer = {
+  url: '__RT_URL__',
+  app: '__RT_APP__',
+  key: '__RT_KEY__',
+
+  async call(method, path, body) {
+    const options = { method: method, headers: { 'X-App-Key': this.key } };
+    if (body !== undefined) {
+      options.headers['Content-Type'] = 'application/json';
+      options.body = JSON.stringify(body);
+    }
+    const response = await fetch(`${this.url}/v1/${this.app}${path}`, options);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    return data;
+  },
+
+  list(col, limit = 100) {
+    return this.call('GET', `/${col}?limit=${limit}`).then(r => r.docs);
+  },
+
+  get(col, id) {
+    return this.call('GET', `/${col}/${encodeURIComponent(id)}`);
+  },
+
+  create(col, data) {
+    return this.call('POST', `/${col}`, data);
+  },
+
+  set(col, id, data) {
+    return this.call('PUT', `/${col}/${encodeURIComponent(id)}`, data);
+  },
+
+  patch(col, id, data) {
+    return this.call('PATCH', `/${col}/${encodeURIComponent(id)}`, data);
+  },
+
+  remove(col, id) {
+    return this.call('DELETE', `/${col}/${encodeURIComponent(id)}`);
+  },
+
+  // Appeler subscribe() AVANT list() : aucun changement n'est perdu entre les deux.
+  // Le flux se coupe quand la PWA passe en arrière-plan (économise le quota) et rattrape
+  // les changements manqués au retour. Absent plus de 7 jours : recharger avec list().
+  async subscribe(col, onChange) {
+    const filter = col ? `&col=${encodeURIComponent(col)}` : '';
+    let source = null;
+    let stopped = false;
+    let catching = false;
+    let last = (await this.call('GET', '/changes?since=latest')).last;
+
+    const open = () => {
+      if (stopped || source || document.hidden) return;
+      source = new EventSource(`${this.url}/v1/${this.app}/stream?key=${encodeURIComponent(this.key)}&since=${last}${filter}`);
+      source.addEventListener('change', (event) => {
+        const change = JSON.parse(event.data);
+        last = Math.max(last, change.seq);
+        onChange(change);
+      });
+    };
+
+    const close = () => {
+      if (source) {
+        source.close();
+        source = null;
+      }
+    };
+
+    const catchUp = async () => {
+      for (let i = 0; i < 20; i++) {
+        const result = await this.call('GET', `/changes?since=${last}${filter}`);
+        result.changes.forEach(change => onChange(change));
+        last = Math.max(last, result.last);
+        if (result.changes.length < 200) break;
+      }
+    };
+
+    const onVisibility = () => {
+      if (document.hidden) {
+        close();
+        return;
+      }
+      if (catching) return;
+      catching = true;
+      catchUp().catch(() => {}).then(() => {
+        catching = false;
+        open();
+      });
+    };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    open();
+
+    return () => {
+      stopped = true;
+      document.removeEventListener('visibilitychange', onVisibility);
+      close();
+    };
+  }
+};
+</script>
 
     <!-- Script Logique & Console Interceptor -->
     <script>
@@ -3674,6 +4323,858 @@ async function addWorkerRoute() {
         await uiAlert('Erreur ajout route : ' + err.message, { error: true });
     }
 }
+const REALTIMER_NAME = 'realtimer';
+const REALTIMER_RESOURCE = 'realtimer';
+const AI_REALTIMER_PROMPT = [
+    "Tu adaptes « Realtimer », un Worker Cloudflare GÉNÉRIQUE partagé par plusieurs PWA (outil Workers Studio).",
+    "Realtimer fournit : des documents JSON par collection (D1), du temps réel par flux SSE, un mini stockage clé/valeur (KV), une clé par application et un CORS par origine.",
+    "Le Worker est déjà prêt : dans la grande majorité des cas tu ne le modifies PAS. Ton travail principal est d'adapter la PWA pour qu'elle l'utilise.",
+    "",
+    "Réponds UNIQUEMENT en markdown, avec ces sections de niveau 2, dans cet ordre :",
+    "## Résumé",
+    "Quelques phrases claires en français : ce qui change dans la PWA, les collections utilisées, le comportement temps réel, les points d'attention.",
+    "## Config",
+    '```json',
+    '{ "app": "nom-de-la-pwa", "origins": ["https://mon-domaine.com"], "collections": ["commandes", "messages"] }',
+    '```',
+    "## Client",
+    "Un bloc de code JS complet, prêt à coller dans la PWA : la bibliothèque Realtimer fournie ci-dessous (placeholders __RT_URL__, __RT_APP__, __RT_KEY__ laissés tels quels) suivie du code propre à la PWA.",
+    "## Worker (OPTIONNEL)",
+    "À inclure uniquement si l'API générique ne suffit vraiment pas. Alors : code complet, module ES sans import, mêmes liaisons RT_KV, RT_DB et secret ADMIN_KEY, aucune autre liaison.",
+    "## Notes (OPTIONNEL)",
+    "Limites, pièges, suites possibles.",
+    "",
+    "Règles :",
+    "1. Config : app en kebab-case (nom unique de la PWA) ; origins = origines exactes (https://domaine, sans slash final), [] si inconnues ; collections = noms kebab-case courts réellement utilisés.",
+    "2. Les données sont des objets JSON (256 Ko max), jamais de binaires. Identifiants : lettres, chiffres, _ . : - (128 max).",
+    "3. Appelle Realtimer.subscribe() AVANT Realtimer.list() au démarrage d'un écran.",
+    "4. Jamais de vraie clé ni de secret dans le code : seuls les placeholders.",
+    "5. Ne change rien d'autre dans la PWA que ce qui est nécessaire.",
+    "",
+    "API de Realtimer (toutes les routes : /v1/{app}/..., clé en en-tête X-App-Key ou ?key=) :",
+    "- GET    /v1/{app}/{col}?limit=100&order=desc|asc → { docs: [{ id, data, created_at, updated_at }] }",
+    "- POST   /v1/{app}/{col} (corps = objet JSON) → { id, data, created_at, updated_at }",
+    "- GET    /v1/{app}/{col}/{id}",
+    "- PUT    /v1/{app}/{col}/{id} (remplace le document)",
+    "- PATCH  /v1/{app}/{col}/{id} (fusion superficielle)",
+    "- DELETE /v1/{app}/{col}/{id}",
+    "- GET    /v1/{app}/changes?since=N|latest&col=...&limit=200 → { changes: [{ seq, col, id, op: set|delete, data, ts }], last }",
+    "- GET    /v1/{app}/stream?since=N|latest&col=... → SSE, événement change (id = seq), se referme toutes les ~25 s, EventSource se reconnecte seul.",
+    "- GET|PUT|DELETE /v1/{app}/kv/{key}?ttl=secondes (PUT : ttl minimum 60, valeur = objet JSON ≤ 20 Ko)."
+].join('\n');
+function getRealtimerTemplate(id) {
+    const el = document.getElementById(id);
+    return el ? el.textContent.replace(/^\r?\n/, '') : '';
+}
+function getRealtimerAdminKey() {
+    try {
+        return localStorage.getItem('rt_admin_key') || '';
+    } catch (err) {
+        return '';
+    }
+}
+function storeRealtimerAdminKey(key) {
+    try {
+        localStorage.setItem('rt_admin_key', key);
+    } catch (err) {
+        console.warn('Clé admin Realtimer non mémorisée sur cet appareil :', err.message);
+    }
+}
+function generateRealtimerAdminKey() {
+    const bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    return 'rt_admin_' + Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+}
+async function realtimerUrl() {
+    const subdomain = await getWorkersSubdomain();
+    if (!subdomain) throw new Error('Aucun sous-domaine workers.dev sur ce compte.');
+    return `https://${REALTIMER_NAME}.${subdomain}.workers.dev`;
+}
+async function realtimerAdmin(method, path, body, adminKey) {
+    const key = adminKey || getRealtimerAdminKey();
+    if (!key) throw new Error('Clé admin Realtimer absente de cet appareil.');
+
+    const base = await realtimerUrl();
+    const options = { method: method, headers: { 'X-Admin-Key': key } };
+    if (body !== undefined) {
+        options.headers['Content-Type'] = 'application/json';
+        options.body = JSON.stringify(body);
+    }
+
+    const response = await fetch(base + path, options);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `Erreur HTTP ${response.status}`);
+    return data;
+}
+async function realtimerExists() {
+    const response = await cfFetch(`/workers/scripts/${REALTIMER_NAME}/settings`);
+    return response.ok;
+}
+async function buildRealtimerContext(info) {
+    const fence = '`'.repeat(3);
+    const lines = [];
+    let exists = false;
+    let source = getRealtimerTemplate('rt-worker-template');
+    let sourceLabel = 'modèle de base (pas encore déployé)';
+
+    try {
+        const response = await cfFetch(`/workers/scripts/${REALTIMER_NAME}/content/v2`);
+        if (response.ok) {
+            exists = true;
+            source = await response.text();
+            sourceLabel = 'code actuellement déployé';
+        }
+    } catch (err) {
+        console.warn('Code Realtimer déployé illisible, modèle de base utilisé :', err.message);
+    }
+
+    lines.push('CONTEXTE (généré automatiquement par Workers Studio, ne pas demander à l\'utilisateur) :');
+    lines.push(`- worker_realtimer: ${exists ? 'déjà déployé' : 'pas encore déployé (Workers Studio installera la base générique, KV et D1 compris)'}`);
+
+    try {
+        lines.push(`- url_de_base: ${await realtimerUrl()} (remplace automatiquement __RT_URL__)`);
+    } catch (err) {
+        lines.push('- url_de_base: inconnue (sera renseignée automatiquement)');
+    }
+
+    if (exists && getRealtimerAdminKey()) {
+        try {
+            const data = await realtimerAdmin('GET', '/admin/apps');
+            const apps = data.apps || [];
+            if (apps.length > 0) {
+                lines.push('- apps_déjà_enregistrées: ' + apps.map(a => `${a.name} [${(a.collections || []).join(', ') || 'toutes collections'}]`).join(' ; '));
+                lines.push('  (réutilise le même nom d\'app uniquement s\'il s\'agit de la même PWA)');
+            } else {
+                lines.push('- apps_déjà_enregistrées: aucune');
+            }
+        } catch (err) {
+            console.warn('Liste des applications Realtimer indisponible :', err.message);
+        }
+    }
+
+    lines.push('');
+    lines.push('Bibliothèque cliente à inclure dans la section ## Client :');
+    lines.push(fence + 'js');
+    lines.push(getRealtimerTemplate('rt-client-template').trim());
+    lines.push(fence);
+    lines.push('');
+    lines.push(`Code du Worker (${sourceLabel}) : à ne renvoyer dans ## Worker que s'il doit vraiment changer.`);
+    lines.push(fence + 'js');
+    lines.push(source.trim());
+    lines.push(fence);
+    lines.push('');
+
+    lines.push('PWA À ADAPTER :');
+    if (info) {
+        lines.push(`- nom: ${info.name}`);
+        lines.push(`- app: ${info.app} (à reprendre tel quel dans ## Config)`);
+        if (info.github) lines.push(`- dépôt GitHub: ${info.github}`);
+        if (info.pagesUrl) lines.push(`- url publiée (GitHub Pages): ${info.pagesUrl}`);
+        lines.push(info.origins.length
+            ? `- origins: ${JSON.stringify(info.origins)} (à reprendre tels quels dans ## Config)`
+            : '- origins: non précisées (laisse [] dans ## Config)');
+        lines.push('- collections: à déterminer par toi selon les données de la PWA (## Config)');
+        if (info.extra) {
+            lines.push('- précisions de l\'utilisateur :');
+            lines.push(info.extra);
+        }
+    } else {
+        lines.push('- nom, app et origins : à déterminer par toi à partir de la PWA');
+    }
+
+    lines.push('');
+    lines.push('Tu as déjà le code de la PWA dans cette conversation : ne me le redemande pas. Adapte uniquement ce qui doit être mis à jour pour passer en temps réel.');
+    lines.push('Dans ## Client, mets la bibliothèque et le code à ajouter ou à remplacer dans la PWA, pas la PWA entière.');
+    lines.push('');
+    lines.push('DEMANDE :');
+    lines.push('Rends cette PWA temps réel avec Realtimer : toutes les données partagées doivent se synchroniser en direct entre les appareils.');
+    lines.push('Realtimer est la source de vérité. Choisis toi-même, selon la PWA, ce qu\'il faut garder en local comme cache et file d\'attente hors ligne : localStorage pour de petits réglages ou un état léger, IndexedDB pour des volumes plus importants ou un vrai fonctionnement hors ligne.');
+    lines.push('Repère toi-même les données à synchroniser et les collections nécessaires. Ne touche à rien d\'autre.');
+
+    return lines.join('\n');
+}
+function parseGithubRepo(url) {
+    const match = String(url || '').trim().match(/github\.com\/([^/\s?#]+)\/([^/\s?#]+)/i);
+    if (!match) return null;
+    return { user: match[1], repo: match[2].replace(/\.git$/i, '') };
+}
+function githubPagesInfo(url) {
+    const repo = parseGithubRepo(url);
+    if (!repo) return null;
+
+    const user = repo.user.toLowerCase();
+    const origin = `https://${user}.github.io`;
+    const isUserSite = repo.repo.toLowerCase() === `${user}.github.io`;
+    return { origin: origin, pagesUrl: isUserSite ? origin + '/' : `${origin}/${repo.repo}/` };
+}
+function showRealtimerEmptyModal() {
+    return new Promise((resolve) => {
+        const prefixKey = 'rt_github_prefix';
+        let savedPrefix = '';
+        try {
+            savedPrefix = localStorage.getItem(prefixKey) || '';
+        } catch (err) {
+            savedPrefix = '';
+        }
+        const prefix = savedPrefix || 'https://github.com/mekeirish/';
+
+        const inputClass = "w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-3 text-base focus:outline-none focus:border-orange-500";
+        const areaClass = "w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-base font-mono focus:outline-none focus:border-orange-500";
+
+        const overlay = document.createElement('div');
+        overlay.className = 'fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4';
+
+        const panel = document.createElement('div');
+        panel.className = 'w-full max-w-md bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl p-4 space-y-3 max-h-[90vh] overflow-y-auto';
+
+        const title = document.createElement('h3');
+        title.className = 'text-base font-semibold text-slate-100';
+        title.textContent = '⚡ Realtimer empty';
+        panel.appendChild(title);
+
+        const addField = (labelText, element, helpText) => {
+            const wrap = document.createElement('div');
+
+            const label = document.createElement('span');
+            label.className = 'block text-[11px] uppercase tracking-wider text-slate-500 mb-1';
+            label.textContent = labelText;
+            wrap.appendChild(label);
+
+            wrap.appendChild(element);
+
+            if (helpText) {
+                const help = document.createElement('p');
+                help.className = 'text-xs text-slate-500 mt-1';
+                help.textContent = helpText;
+                wrap.appendChild(help);
+            }
+
+            panel.appendChild(wrap);
+        };
+
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.placeholder = 'Filebase';
+        nameInput.autocapitalize = 'off';
+        nameInput.autocomplete = 'off';
+        nameInput.spellcheck = false;
+        nameInput.className = inputClass;
+        addField('Nom de la PWA', nameInput);
+
+        const githubInput = document.createElement('input');
+        githubInput.type = 'text';
+        githubInput.value = prefix;
+        githubInput.autocapitalize = 'off';
+        githubInput.autocomplete = 'off';
+        githubInput.spellcheck = false;
+        githubInput.className = inputClass + ' font-mono';
+        addField('Lien GitHub du dépôt', githubInput);
+
+        const originsInput = document.createElement('textarea');
+        originsInput.rows = 2;
+        originsInput.placeholder = 'https://mekeirish.github.io';
+        originsInput.autocapitalize = 'off';
+        originsInput.spellcheck = false;
+        originsInput.className = areaClass;
+        addField('Origine autorisée', originsInput, 'Calculée depuis le lien GitHub : domaine seul, sans chemin.');
+
+        const extraArea = document.createElement('textarea');
+        extraArea.rows = 2;
+        extraArea.placeholder = 'Rien de plus à préciser';
+        extraArea.autocapitalize = 'off';
+        extraArea.spellcheck = false;
+        extraArea.className = areaClass;
+        addField('Précisions (optionnel)', extraArea);
+
+        let githubTouched = false;
+        let originsTouched = false;
+
+        const refresh = () => {
+            if (!githubTouched) {
+                githubInput.value = prefix + nameInput.value.trim().replace(/\s+/g, '-');
+            }
+            if (!originsTouched) {
+                const pages = githubPagesInfo(githubInput.value);
+                originsInput.value = pages ? pages.origin : '';
+            }
+        };
+
+        nameInput.oninput = refresh;
+        githubInput.oninput = () => {
+            githubTouched = true;
+            refresh();
+        };
+        originsInput.oninput = () => {
+            originsTouched = true;
+        };
+
+        const actions = document.createElement('div');
+        actions.className = 'grid grid-cols-2 gap-2 pt-2';
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.textContent = 'Annuler';
+        cancelBtn.className = 'py-3 bg-slate-700 active:bg-slate-600 text-white rounded-lg text-sm font-medium';
+        cancelBtn.onclick = () => {
+            overlay.remove();
+            resolve(null);
+        };
+        actions.appendChild(cancelBtn);
+
+        const okBtn = document.createElement('button');
+        okBtn.type = 'button';
+        okBtn.textContent = '📋 Copier le prompt';
+        okBtn.className = 'py-3 bg-orange-600 active:bg-orange-500 text-white rounded-lg text-sm font-medium';
+        okBtn.onclick = async () => {
+            const name = nameInput.value.trim();
+            const app = name.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^[-_]+|[-_]+$/g, '').slice(0, 48);
+            if (!app) {
+                await uiAlert('Donne un nom à la PWA.', { error: true });
+                return;
+            }
+
+            const origins = [];
+            originsInput.value.split(/[\s,]+/).forEach(value => {
+                const origin = value.trim().replace(/\/+$/, '');
+                if (/^https?:\/\//i.test(origin) && !origins.includes(origin)) origins.push(origin);
+            });
+
+            const github = githubInput.value.trim();
+            const repo = parseGithubRepo(github);
+            const pages = githubPagesInfo(github);
+
+            if (repo) {
+                try {
+                    localStorage.setItem(prefixKey, `https://github.com/${repo.user}/`);
+                } catch (err) {
+                    // préfixe non mémorisé : sans conséquence
+                }
+            }
+
+            overlay.remove();
+            resolve({
+                name: name,
+                app: app,
+                github: repo ? github : '',
+                pagesUrl: pages ? pages.pagesUrl : '',
+                origins: origins,
+                extra: extraArea.value.trim()
+            });
+        };
+        actions.appendChild(okBtn);
+
+        panel.appendChild(actions);
+        overlay.appendChild(panel);
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                overlay.remove();
+                resolve(null);
+            }
+        });
+        document.body.appendChild(overlay);
+        nameInput.focus();
+    });
+}
+async function copyRealtimerEmpty() {
+    const info = await showRealtimerEmptyModal();
+    if (!info) return;
+
+    const fullPrompt = AI_REALTIMER_PROMPT + '\n\n---\n' + await buildRealtimerContext(info);
+
+    try {
+        await navigator.clipboard.writeText(fullPrompt);
+        console.success(`Prompt Realtimer copié pour "${info.name}".`);
+        await uiAlert(
+            'Prompt copié.\n\n1. Colle-le dans l\'IA qui a déjà le code de la PWA.\n2. Copie sa réponse markdown.\n3. Reviens ici → « Realtimer Full ».',
+            { title: '⚡ Realtimer prêt' }
+        );
+    } catch (err) {
+        console.error('Copie du prompt Realtimer impossible :', err.message);
+        showAiPromptOverlay(fullPrompt);
+    }
+}
+function parseRealtimerMarkdown(text) {
+    if (!text || typeof text !== 'string') return null;
+
+    const outer = text.trim().match(/^(`{4,})[a-zA-Z]*[ \t]*\r?\n([\s\S]*)\r?\n\1\s*$/);
+    if (outer) text = outer[2];
+
+    const fenceRegex = /(`{3,})[a-zA-Z]*[ \t]*\r?\n([\s\S]*?)\r?\n[ \t]*\1(?!`)/;
+    const fenceRegexAll = /(`{3,})[a-zA-Z]*[ \t]*\r?\n[\s\S]*?\r?\n[ \t]*\1(?!`)/g;
+    const firstFence = (block) => {
+        const found = block.match(fenceRegex);
+        return found ? found[2].replace(/\s+$/, '') : '';
+    };
+    const stripFences = (block) => block.replace(fenceRegexAll, '').trim();
+    const toList = (value) => Array.isArray(value) ? value.map(v => String(v).trim()).filter(Boolean) : [];
+    const cleanName = (value) => String(value).toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^[-_]+|[-_]+$/g, '').slice(0, 48);
+
+    const marks = [];
+    const headingRegex = /^##[ \t]+(.+?)[ \t]*$/gm;
+    let match;
+    while ((match = headingRegex.exec(text)) !== null) {
+        marks.push({
+            title: match[1].normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(),
+            start: match.index,
+            bodyStart: match.index + match[0].length
+        });
+    }
+
+    const plan = { summary: '', config: null, clientCode: '', workerCode: '', notes: '', warnings: [], installBase: false };
+
+    marks.forEach((mark, i) => {
+        const body = text.slice(mark.bodyStart, i + 1 < marks.length ? marks[i + 1].start : text.length);
+        if (mark.title.startsWith('resume')) plan.summary = stripFences(body);
+        else if (mark.title.startsWith('config')) plan.config = extractJsonFromMarkdown(body);
+        else if (mark.title.startsWith('client')) plan.clientCode = firstFence(body);
+        else if (mark.title.startsWith('worker')) plan.workerCode = firstFence(body);
+        else if (mark.title.startsWith('notes')) plan.notes = stripFences(body);
+    });
+
+    if (plan.config) {
+        const cfg = plan.config;
+        const app = cleanName(cfg.app || cfg.name || '');
+        if (app) {
+            plan.config = {
+                app: app,
+                origins: toList(cfg.origins).filter(o => /^https?:\/\//i.test(o)).map(o => o.replace(/\/+$/, '')),
+                collections: toList(cfg.collections).map(cleanName).filter(c => c && !['changes', 'stream', 'kv'].includes(c))
+            };
+        } else {
+            plan.config = null;
+            plan.warnings.push('La section Config ne contient pas de nom d\'application valide.');
+        }
+    }
+
+    if (!plan.config && !plan.clientCode && !plan.workerCode) return null;
+
+    if (plan.clientCode && !plan.config) {
+        plan.warnings.push('Sans section Config valide, aucune application ne sera enregistrée.');
+    }
+    if (plan.clientCode) {
+        const missing = ['__RT_URL__', '__RT_APP__', '__RT_KEY__'].filter(p => !plan.clientCode.includes(p));
+        if (missing.length > 0) {
+            plan.warnings.push('Le code client ne contient pas : ' + missing.join(', ') + ' (non remplacé automatiquement).');
+        }
+    }
+    if (plan.workerCode) {
+        const syntaxError = checkWorkerSyntax(plan.workerCode);
+        if (syntaxError) plan.warnings.push('Syntaxe du Worker douteuse : ' + syntaxError);
+        if (!plan.workerCode.includes('RT_KV') || !plan.workerCode.includes('RT_DB')) {
+            plan.warnings.push('Le Worker ne référence pas RT_KV / RT_DB : les liaisons KV et D1 ne serviront à rien.');
+        }
+    }
+
+    return plan;
+}
+async function openRealtimerFull() {
+    let clipboard = '';
+    try {
+        clipboard = await navigator.clipboard.readText();
+    } catch (err) {
+        console.warn('Lecture du presse-papier refusée :', err.message);
+    }
+
+    const plan = parseRealtimerMarkdown(clipboard);
+    if (plan) {
+        await reviewAndApplyRealtimer(plan);
+        return;
+    }
+
+    showRealtimerPasteOverlay();
+}
+function showRealtimerPasteOverlay() {
+    const overlay = document.createElement('div');
+    overlay.className = "fixed inset-0 z-[60] bg-black/80 flex flex-col p-4 gap-3";
+
+    const title = document.createElement('p');
+    title.className = "text-sm text-slate-300";
+    title.textContent = "Colle ici la réponse markdown de l'IA (sections ## Résumé, ## Config, ## Client, ## Worker) :";
+    overlay.appendChild(title);
+
+    const area = document.createElement('textarea');
+    area.className = "flex-1 w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-xs font-mono text-slate-200";
+    area.placeholder = "## Résumé\n…\n\n## Config\n```json\n{ \"app\": \"ma-pwa\", \"collections\": [\"items\"] }\n```\n\n## Client\n```js\n…\n```";
+    overlay.appendChild(area);
+
+    const installBtn = document.createElement('button');
+    installBtn.textContent = '📦 Installer / réparer la base Realtimer (sans IA)';
+    installBtn.className = "py-3 bg-amber-600/20 text-amber-300 active:bg-amber-600/40 rounded-lg text-sm font-medium";
+    installBtn.onclick = async () => {
+        overlay.remove();
+        await reviewAndApplyRealtimer({
+            summary: 'Installation de la base générique Realtimer : KV et D1 « ' + REALTIMER_RESOURCE + ' » créées si besoin, Worker déployé, clé admin générée.',
+            config: null,
+            clientCode: '',
+            workerCode: '',
+            notes: '',
+            warnings: [],
+            installBase: true
+        });
+    };
+    overlay.appendChild(installBtn);
+
+    const row = document.createElement('div');
+    row.className = "grid grid-cols-2 gap-3";
+
+    const okBtn = document.createElement('button');
+    okBtn.textContent = '✓ Charger';
+    okBtn.className = "py-3 bg-emerald-600 active:bg-emerald-500 text-white rounded-lg text-sm font-medium";
+    okBtn.onclick = async () => {
+        const plan = parseRealtimerMarkdown(area.value);
+        if (!plan) {
+            await uiAlert('Aucune section exploitable (## Config, ## Client ou ## Worker) dans ce texte.', { error: true });
+            return;
+        }
+        overlay.remove();
+        await reviewAndApplyRealtimer(plan);
+    };
+    row.appendChild(okBtn);
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Annuler';
+    cancelBtn.className = "py-3 bg-slate-700 active:bg-slate-600 text-white rounded-lg text-sm font-medium";
+    cancelBtn.onclick = () => overlay.remove();
+    row.appendChild(cancelBtn);
+
+    overlay.appendChild(row);
+    document.body.appendChild(overlay);
+    area.focus();
+}
+function showRealtimerReview(plan) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'fixed inset-0 z-[120] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4';
+
+        const panel = document.createElement('div');
+        panel.className = 'w-full max-w-md bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl p-4 space-y-3 max-h-[90vh] overflow-y-auto';
+
+        const title = document.createElement('h3');
+        title.className = 'text-base font-semibold text-slate-100';
+        title.textContent = '⚡ Réponse Realtimer';
+        panel.appendChild(title);
+
+        if (plan.summary) {
+            const summary = document.createElement('p');
+            summary.className = 'text-sm text-slate-300 whitespace-pre-wrap break-words';
+            summary.textContent = plan.summary;
+            panel.appendChild(summary);
+        }
+
+        const facts = document.createElement('div');
+        facts.className = 'space-y-1 p-3 bg-slate-900/50 border border-slate-700 rounded-xl';
+
+        const addFact = (label, value) => {
+            const line = document.createElement('p');
+            line.className = 'text-xs text-slate-300 break-words';
+
+            const strong = document.createElement('span');
+            strong.className = 'text-slate-500 uppercase tracking-wider';
+            strong.textContent = label + ' : ';
+            line.appendChild(strong);
+            line.appendChild(document.createTextNode(value));
+            facts.appendChild(line);
+        };
+
+        const cfg = plan.config;
+        addFact('Application', cfg ? cfg.app : 'aucune (pas d\'enregistrement)');
+        if (cfg) {
+            addFact('Origines', cfg.origins.length ? cfg.origins.join(', ') : 'toutes (aucune restriction)');
+            addFact('Collections', cfg.collections.length ? cfg.collections.join(', ') : 'toutes');
+        }
+
+        let workerText;
+        if (plan.workerCode) {
+            workerText = `modifié (${plan.workerCode.split('\n').length} lignes), sera redéployé`;
+        } else if (!plan.exists) {
+            workerText = 'base générique, sera installée (KV et D1 « ' + REALTIMER_RESOURCE + ' » créées si besoin)';
+        } else if (plan.installBase) {
+            workerText = 'base générique, remplacera le code actuel';
+        } else {
+            workerText = 'inchangé (base générique conservée)';
+        }
+        addFact('Worker', workerText);
+
+        if (cfg) {
+            addFact('Client', plan.clientCode ? `${plan.clientCode.split('\n').length} lignes, clé et URL injectées` : 'bibliothèque de base');
+        }
+        panel.appendChild(facts);
+
+        (plan.warnings || []).forEach(warning => {
+            const p = document.createElement('p');
+            p.className = 'text-xs text-amber-400 break-words';
+            p.textContent = '⚠️ ' + warning;
+            panel.appendChild(p);
+        });
+
+        if (plan.notes) {
+            const notes = document.createElement('p');
+            notes.className = 'text-xs text-slate-400 whitespace-pre-wrap break-words';
+            notes.textContent = plan.notes;
+            panel.appendChild(notes);
+        }
+
+        const actions = document.createElement('div');
+        actions.className = 'grid grid-cols-2 gap-2 pt-2';
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.textContent = 'Annuler';
+        cancelBtn.className = 'py-3 bg-slate-700 active:bg-slate-600 text-white rounded-lg text-sm font-medium';
+        cancelBtn.onclick = () => {
+            overlay.remove();
+            resolve(false);
+        };
+        actions.appendChild(cancelBtn);
+
+        const okBtn = document.createElement('button');
+        okBtn.type = 'button';
+        okBtn.textContent = 'Appliquer';
+        okBtn.className = 'py-3 bg-orange-600 active:bg-orange-500 text-white rounded-lg text-sm font-medium';
+        okBtn.onclick = () => {
+            overlay.remove();
+            resolve(true);
+        };
+        actions.appendChild(okBtn);
+
+        panel.appendChild(actions);
+        overlay.appendChild(panel);
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                overlay.remove();
+                resolve(false);
+            }
+        });
+        document.body.appendChild(overlay);
+    });
+}
+async function ensureRealtimerKv() {
+    await fetchKvNamespaces();
+    if (kvState.namespacesError) {
+        throw new Error('Liste des namespaces KV indisponible : ' + kvState.namespacesError);
+    }
+
+    const found = kvNamespaces.find(ns => ns.title === REALTIMER_RESOURCE);
+    if (found) return found.id;
+
+    console.log(`Création du namespace KV "${REALTIMER_RESOURCE}"...`);
+    const data = await cfRequest('/storage/kv/namespaces', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: REALTIMER_RESOURCE })
+    });
+    kvNamespaces.push({ id: data.result.id, title: data.result.title });
+    console.success(`Namespace KV "${REALTIMER_RESOURCE}" créé.`);
+    return data.result.id;
+}
+async function ensureRealtimerD1() {
+    const listed = await fetchD1Databases();
+    if (!listed) {
+        throw new Error('Liste des bases D1 indisponible (permission « Account → D1 » requise sur le token).');
+    }
+
+    const found = d1Databases.find(db => db.name === REALTIMER_RESOURCE);
+    if (found) return found.id;
+
+    console.log(`Création de la base D1 "${REALTIMER_RESOURCE}"...`);
+    const data = await cfRequest('/d1/database', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: REALTIMER_RESOURCE })
+    });
+    const id = data.result.uuid || data.result.id;
+    d1Databases.push({ id: id, name: REALTIMER_RESOURCE });
+    console.success(`Base D1 "${REALTIMER_RESOURCE}" créée.`);
+    return id;
+}
+async function deployRealtimerWorker(code, exists) {
+    const kvId = await ensureRealtimerKv();
+    const dbId = await ensureRealtimerD1();
+
+    let compatibilityDate = new Date().toISOString().slice(0, 10);
+    let compatibilityFlags = [];
+
+    if (exists) {
+        try {
+            const settings = await cfRequest(`/workers/scripts/${REALTIMER_NAME}/settings`);
+            compatibilityDate = settings.result.compatibility_date || compatibilityDate;
+            compatibilityFlags = settings.result.compatibility_flags || [];
+        } catch (err) {
+            console.warn('Réglages Realtimer illisibles, valeurs par défaut utilisées :', err.message);
+        }
+        await backupCurrentCode(REALTIMER_NAME);
+    }
+
+    const metadata = {
+        main_module: 'index.js',
+        compatibility_date: compatibilityDate,
+        compatibility_flags: compatibilityFlags,
+        bindings: [
+            { type: 'kv_namespace', name: 'RT_KV', namespace_id: kvId },
+            { type: 'd1', name: 'RT_DB', database_id: dbId }
+        ],
+        keep_bindings: ['secret_text']
+    };
+
+    const formData = new FormData();
+    formData.append('index.js', new Blob([code], { type: 'application/javascript+module' }), 'index.js');
+    formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }), 'metadata.json');
+
+    console.log(`Déploiement du Worker "${REALTIMER_NAME}"...`);
+    const response = await cfFetch(`/workers/scripts/${REALTIMER_NAME}`, { method: 'PUT', body: formData });
+    const raw = await response.text();
+
+    let data;
+    try {
+        data = JSON.parse(raw);
+    } catch (err) {
+        throw new Error(`Réponse non JSON du proxy (HTTP ${response.status}) : ${raw.slice(0, 180)}`);
+    }
+    if (!data.success) {
+        throw new Error(data.errors?.[0]?.message || JSON.stringify(data.errors));
+    }
+
+    try {
+        await cfRequest(`/workers/scripts/${REALTIMER_NAME}/subdomain`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: true })
+        });
+    } catch (err) {
+        console.warn('Publication workers.dev non activée :', err.message);
+    }
+
+    console.success(`Worker "${REALTIMER_NAME}" déployé.`);
+}
+async function ensureRealtimerAdminKey(exists) {
+    const stored = getRealtimerAdminKey();
+    if (stored) return { key: stored, isNew: false };
+    if (!exists) return { key: generateRealtimerAdminKey(), isNew: true };
+
+    const typed = await uiPrompt(
+        'Clé admin Realtimer introuvable sur cet appareil.\nColle-la ici, ou laisse vide pour en générer une nouvelle (l\'ancienne cessera de fonctionner).',
+        '',
+        { placeholder: 'rt_admin_…' }
+    );
+    if (typed === null) return null;
+
+    const value = typed.trim();
+    if (value) return { key: value, isNew: false };
+    return { key: generateRealtimerAdminKey(), isNew: true };
+}
+async function waitRealtimerReady(base) {
+    for (let i = 0; i < 8; i++) {
+        try {
+            const response = await fetch(base + '/');
+            if (response.ok) return true;
+        } catch (err) {
+            // pas encore propagé, on réessaie
+        }
+        await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+    return false;
+}
+async function reviewAndApplyRealtimer(plan) {
+    const { accountId, apiToken } = getCredentials();
+    if (!accountId || !apiToken) {
+        await uiAlert('Veuillez d\'abord configurer vos identifiants.', { error: true });
+        return;
+    }
+
+    try {
+        plan.exists = await realtimerExists();
+    } catch (err) {
+        await uiAlert('Impossible de vérifier Realtimer : ' + err.message, { error: true });
+        return;
+    }
+
+    const proceed = await showRealtimerReview(plan);
+    if (!proceed) return;
+
+    await applyRealtimerPlan(plan);
+}
+async function applyRealtimerPlan(plan) {
+    try {
+        const exists = plan.exists;
+        const needWorker = !exists || !!plan.workerCode || !!plan.installBase;
+
+        if (exists && plan.installBase && !plan.workerCode) {
+            const ok = await uiConfirm('Realtimer est déjà déployé. Le remplacer par la base générique ? Le code actuel reste dans « Versions ».', { danger: true, okText: 'Remplacer' });
+            if (!ok) return;
+        }
+
+        const code = plan.workerCode || getRealtimerTemplate('rt-worker-template');
+        if (needWorker) {
+            const syntaxError = checkWorkerSyntax(code);
+            if (syntaxError) {
+                const keep = await uiConfirm(`Erreur de syntaxe possible dans le Worker :\n${syntaxError}\n\nDéployer quand même ?`, { danger: true, okText: 'Déployer' });
+                if (!keep) return;
+            }
+        }
+
+        let keyInfo = null;
+        if (needWorker || plan.config) {
+            keyInfo = await ensureRealtimerAdminKey(exists);
+            if (keyInfo === null) return;
+        }
+
+        if (needWorker) {
+            await deployRealtimerWorker(code, exists);
+        }
+
+        if (keyInfo && keyInfo.isNew) {
+            await cfRequest(`/workers/scripts/${REALTIMER_NAME}/secrets`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: 'ADMIN_KEY', text: keyInfo.key, type: 'secret_text' })
+            });
+            storeRealtimerAdminKey(keyInfo.key);
+            console.success('Clé admin Realtimer générée et enregistrée comme secret.');
+        }
+
+        const base = await realtimerUrl();
+        const ready = await waitRealtimerReady(base);
+        if (!ready) console.warn('Realtimer ne répond pas encore sur workers.dev : la suite peut échouer, réessaie dans un instant.');
+
+        let message = '';
+        let clientCode = '';
+
+        if (plan.config) {
+            const registered = await realtimerAdmin('PUT', `/admin/apps/${encodeURIComponent(plan.config.app)}`, {
+                origins: plan.config.origins,
+                collections: plan.config.collections
+            }, keyInfo.key);
+            storeRealtimerAdminKey(keyInfo.key);
+
+            const app = registered.app;
+            clientCode = (plan.clientCode || getRealtimerTemplate('rt-client-template'))
+                .split('__RT_URL__').join(base)
+                .split('__RT_APP__').join(app.name)
+                .split('__RT_KEY__').join(app.key);
+
+            console.success(`Application "${app.name}" ${registered.created ? 'créée' : 'mise à jour'} sur Realtimer.`);
+            message += `Application « ${app.name} » ${registered.created ? 'créée' : 'mise à jour'}.\nCollections : ${app.collections.length ? app.collections.join(', ') : 'toutes'}.\nOrigines : ${app.origins.length ? app.origins.join(', ') : 'toutes (aucune restriction)'}.\n\n`;
+        } else {
+            storeRealtimerAdminKey(keyInfo.key);
+        }
+
+        message += `🌐 ${base}`;
+        if (keyInfo && keyInfo.isNew) {
+            message += `\n\n🔐 Clé admin (gardée sur cet appareil, à conserver) :\n${keyInfo.key}`;
+        }
+        if (clientCode) {
+            message += '\n\nLe code client prêt à coller s\'affiche juste après.';
+        }
+
+        await uiAlert(message, { success: true, title: '⚡ Realtimer prêt' });
+        fetchWorkers();
+
+        if (clientCode) showReportOverlay(clientCode);
+    } catch (err) {
+        console.error('Erreur Realtimer :', err.message);
+        await uiAlert('Erreur Realtimer : ' + err.message, { error: true, title: '⚠️ Realtimer' });
+    }
+}
 
         async function fetchWorkers() {
             const { accountId, apiToken } = getCredentials();
@@ -4624,12 +6125,5 @@ try {
 }
         }
     </script>
-<script>
-if ('serviceWorker' in navigator) {
-window.addEventListener('load',()=>{
-navigator.serviceWorker.register('./sw.js').catch(err=>console.error(err));
-});
-}
-</script>
 </body>
 </html>
