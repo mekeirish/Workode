@@ -265,6 +265,7 @@
 </div>
 
         </div>
+<button type="button" data-panel="data" onclick="showDataHelp()" class="w-full mb-4 md:mb-8 py-3 bg-sky-600/20 text-sky-300 active:bg-sky-600/40 rounded-xl text-sm font-medium transition">❓ Help</button>
 <details data-panel="data" class="bg-slate-800 rounded-xl shadow-lg border border-slate-700 mb-4 md:mb-8" ontoggle="if (this.open) refreshKvExplorerNamespaces()">
     <summary class="p-4 text-lg font-semibold text-slate-200 cursor-pointer select-none">🗄️ Explorateur KV</summary>
     <div class="p-4 pt-0 space-y-3">
@@ -1259,6 +1260,200 @@ function switchPanel(name) {
     }
 
     window.scrollTo(0, 0);
+}
+const DATA_HELP_SECTIONS = [
+    {
+        title: '🚀 Avant de commencer',
+        intro: "Les outils de données utilisent ton token Cloudflare. Touche le titre d'un bloc pour l'ouvrir ou le replier.",
+        items: [
+            {
+                button: 'Permissions du token',
+                text: "Si une liste reste vide, c'est souvent une permission du token : « Workers KV Storage » pour KV, « D1 » pour D1 (lecture pour consulter, édition pour modifier).",
+                example: "Le menu KV est vide ? Ajoute « Workers KV Storage » à ton token, puis rouvre le bloc."
+            }
+        ]
+    },
+    {
+        title: '🗄️ Explorateur KV',
+        intro: "KV est un grand carnet de paires clé → valeur. Ici tu les consultes, les crées, les modifies et les supprimées une par une.",
+        items: [
+            {
+                button: 'Menu namespace + Préfixe',
+                text: "Choisis le « carnet » (namespace) à explorer. Le préfixe, facultatif, ne montre que les clés qui commencent par ce texte.",
+                example: "Préfixe « user: » → seules user:1, user:2… sont listées."
+            },
+            {
+                button: 'Lister les clés',
+                text: "Affiche jusqu'à 100 clés. Touche une clé pour charger sa valeur dans les champs du bas.",
+                example: "Touche « Lister les clés », puis la clé config:theme : sa valeur (par exemple sombre) apparaît dans la zone Valeur."
+            },
+            {
+                button: 'Charger plus',
+                text: "N'apparaît que s'il reste des clés à afficher. Il ajoute les 100 suivantes à la liste.",
+                example: "Tu as 250 clés : la liste en montre 100, touche deux fois « Charger plus » pour voir les autres."
+            },
+            {
+                button: '＋ Nouvelle',
+                text: "Vide les champs Clé et Valeur pour préparer une nouvelle entrée.",
+                example: "Touche « Nouvelle », tape la clé message:accueil, puis passe à « Enregistrer »."
+            },
+            {
+                button: '💾 Enregistrer',
+                text: "Crée la clé, ou remplace sa valeur si elle existe déjà. La valeur est enregistrée comme texte.",
+                example: "Clé message:accueil, valeur Bienvenue ! → « Enregistrer ». La clé apparaît dans la liste."
+            },
+            {
+                button: '🗑️ Supprimer',
+                text: "Supprime définitivement la clé ouverte, après une confirmation.",
+                example: "Touche la clé message:accueil dans la liste, puis « Supprimer » et confirme."
+            }
+        ],
+        note: "Compte gratuit : 1 000 écritures, suppressions et listes par jour, et 100 000 lectures par jour."
+    },
+    {
+        title: '🧮 Explorateur D1',
+        intro: "D1 est une base de données SQL (des tables avec des lignes). Ici tu les parcours et tu lances des requêtes.",
+        items: [
+            {
+                button: 'Menu base + Lister les tables',
+                text: "Choisis la base, puis « Lister les tables ». Chaque table devient un bouton : un appui lance tout seul une lecture des 50 premières lignes.",
+                example: "Dans la base realtimer, touche la table docs : tu vois les 50 premiers documents de tes PWA."
+            },
+            {
+                button: '▶️ Exécuter (lecture)',
+                text: "Tape une requête dans la zone SQL puis « Exécuter ». Les lectures (SELECT) s'exécutent tout de suite, le résultat s'affiche en tableau (200 lignes au maximum).",
+                example: "SELECT col, COUNT(*) AS n FROM docs GROUP BY col;  → le nombre de documents par collection."
+            },
+            {
+                button: '▶️ Exécuter (modification)',
+                text: "Toute requête qui modifie (INSERT, UPDATE, DELETE…) demande d'abord une confirmation. Il n'y a pas d'annulation : mets toujours un WHERE.",
+                example: "UPDATE ma_table SET statut = 'ok' WHERE id = 3;  → une seule ligne est modifiée, après confirmation."
+            }
+        ],
+        note: "Compte gratuit : 5 millions de lignes lues et 100 000 lignes écrites par jour. Ajoute LIMIT à tes lectures pour économiser."
+    },
+    {
+        title: '📦 Export / Import KV',
+        intro: "Pour sauvegarder un namespace dans un fichier JSON, ou y verser des clés depuis un fichier.",
+        items: [
+            {
+                button: '⬇️ Exporter en JSON',
+                text: "Lit toutes les clés du namespace choisi et télécharge un fichier JSON. Seules les valeurs texte sont gérées. Si le téléchargement échoue, le texte s'affiche pour le copier.",
+                example: "Choisis le namespace realtimer, touche « Exporter » : tu obtiens le fichier kv-realtimer-2026-11-20.json."
+            },
+            {
+                button: 'Fichier / zone de texte',
+                text: "Charge un fichier .json, ou colle directement le JSON dans la zone. Il accepte l'export de cet outil, une liste [{name, value}] ou un simple objet {clé: valeur}.",
+                example: 'Colle {"bienvenue": "Bonjour", "theme": "sombre"} dans la zone.'
+            },
+            {
+                button: '⬆️ Importer dans le namespace',
+                text: "Écrit les clés dans le namespace choisi, après une confirmation. Les clés de même nom sont écrasées, et chaque clé compte comme une écriture.",
+                example: "Avec le JSON ci-dessus : deux clés, bienvenue et theme, sont créées dans le namespace."
+            },
+            {
+                button: 'Copier un namespace vers un autre',
+                text: "Combine les deux : exporte le premier, change le menu vers le second, charge le fichier, puis importe.",
+                example: "Export de realtimer → menu sur realtimer-test → charge le fichier → « Importer »."
+            }
+        ],
+        note: "Compte gratuit : 1 000 écritures par jour, donc n'importe pas plus de 1 000 clés dans la journée."
+    }
+];
+function showDataHelp() {
+    const existing = document.getElementById('data-help-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'data-help-overlay';
+    overlay.className = 'fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4';
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) overlay.remove();
+    });
+
+    const panel = document.createElement('div');
+    panel.className = 'w-full max-w-lg bg-slate-800 border border-slate-700 rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto';
+
+    const header = document.createElement('div');
+    header.className = 'sticky top-0 z-10 flex items-center justify-between gap-2 px-4 py-3 bg-slate-800 border-b border-slate-700';
+
+    const title = document.createElement('h3');
+    title.className = 'text-base font-semibold text-slate-100';
+    title.textContent = '❓ Help : outils de données';
+    header.appendChild(title);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.textContent = '✕';
+    closeBtn.title = 'Fermer';
+    closeBtn.className = 'shrink-0 w-10 h-10 flex items-center justify-center bg-slate-700 active:bg-slate-600 text-slate-200 rounded-lg text-lg';
+    closeBtn.onclick = () => overlay.remove();
+    header.appendChild(closeBtn);
+
+    panel.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'p-4 space-y-3';
+
+    DATA_HELP_SECTIONS.forEach((section, index) => {
+        const details = document.createElement('details');
+        details.className = 'bg-slate-900/50 border border-slate-700 rounded-xl';
+        if (index === 0) details.open = true;
+
+        const summary = document.createElement('summary');
+        summary.className = 'p-3 text-sm font-semibold text-slate-200 cursor-pointer select-none';
+        summary.textContent = section.title;
+        details.appendChild(summary);
+
+        const content = document.createElement('div');
+        content.className = 'px-3 pb-3 space-y-3';
+
+        const intro = document.createElement('p');
+        intro.className = 'text-sm text-slate-300';
+        intro.textContent = section.intro;
+        content.appendChild(intro);
+
+        section.items.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'space-y-1.5 p-3 bg-slate-800 border border-slate-700 rounded-lg';
+
+            const label = document.createElement('span');
+            label.className = 'inline-block px-2 py-1 text-xs font-medium bg-slate-700 text-orange-300 rounded';
+            label.textContent = item.button;
+            card.appendChild(label);
+
+            const text = document.createElement('p');
+            text.className = 'text-sm text-slate-300';
+            text.textContent = item.text;
+            card.appendChild(text);
+
+            const example = document.createElement('p');
+            example.className = 'text-xs text-emerald-300 bg-black/40 rounded-lg p-2 break-words';
+
+            const exampleLabel = document.createElement('span');
+            exampleLabel.className = 'text-slate-500';
+            exampleLabel.textContent = 'Exemple : ';
+            example.appendChild(exampleLabel);
+            example.appendChild(document.createTextNode(item.example));
+            card.appendChild(example);
+
+            content.appendChild(card);
+        });
+
+        if (section.note) {
+            const note = document.createElement('p');
+            note.className = 'text-xs text-amber-400';
+            note.textContent = 'ℹ️ ' + section.note;
+            content.appendChild(note);
+        }
+
+        details.appendChild(content);
+        body.appendChild(details);
+    });
+
+    panel.appendChild(body);
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
 }
 function notifyConsoleTab(type) {
     if (panelState.active === 'console') return;
